@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<EmbeddedRTOSProfile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<UniqueID>com.sysprogs.chibios</UniqueID>
+	<Name>ChibiOs</Name>
+	<IdleThreadName>(idle)</IdleThreadName>
+	<SupportedMachineIDs>
+		<int>40</int>
+	</SupportedMachineIDs>
+	<RequiredSymbols>
+		<ELFSymbolReference>
+			<SymbolName>ch</SymbolName>
+		</ELFSymbolReference>
+	</RequiredSymbols>
+	<NonInstrumentedSymbols>
+	</NonInstrumentedSymbols>
+	<AnalysisHooks>
+	</AnalysisHooks>
+	
+	<AnalysisFeatures>
+	</AnalysisFeatures>
+
+	<ThreadPlugin>ChibiOsThreads.dll</ThreadPlugin>
+</EmbeddedRTOSProfile>
