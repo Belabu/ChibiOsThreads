@@ -8,13 +8,19 @@ namespace ChibiOsThreads
     public class ChibiOsThreadProvider : IVirtualThreadProvider2
     {
         private const int CONTEXT_OFFSET = 10;
+        private const uint SCB_ICSR_VECTACTIVE_Msk = 0x1FF;
 
         public IVirtualThread[] GetVirtualThreads(IGlobalExpressionEvaluator e)
         {
+            ulong? ch = e.EvaluateIntegralExpression("&ch");
             ulong? firstThread = e.EvaluateIntegralExpression("ch.rlist.newer");
 
             if (!firstThread.HasValue)
                 return Array.Empty<IVirtualThread>();
+
+            // SCB->ICSR
+            ulong icsr = e.EvaluateIntegralExpression("*(uint32_t*)0xe000ed04") ?? 0;
+            bool isInInterrupt = (icsr & SCB_ICSR_VECTACTIVE_Msk) > 0;
 
             ulong? currentThread = e.EvaluateIntegralExpression("ch.rlist.current");
 
@@ -26,13 +32,10 @@ namespace ChibiOsThreads
             ulong? thread = firstThread;
             do
             {
-                var virtualThread = new VirtualThread(thread.Value, threads.Count, thread == currentThread, e);
-                if (!virtualThread.IsValid)
-                    break;
-
+                var virtualThread = new VirtualThread(thread.Value, threads.Count + 1, thread == currentThread, isInInterrupt, e);
                 threads.Add(virtualThread);
                 thread = e.EvaluateIntegralExpression($"((ch_thread *)0x{thread.Value:x}).newer");
-            } while (thread.HasValue && thread.Value != firstThread);
+            } while (thread.HasValue && thread.Value != ch);
 
             return threads.ToArray();
         }
@@ -81,20 +84,21 @@ namespace ChibiOsThreads
             private readonly IGlobalExpressionEvaluator _evaluator;
             private readonly bool _running;
 
-            public VirtualThread(ulong threadObjectAddress, int index, bool running, IGlobalExpressionEvaluator evaluator)
+            public VirtualThread(ulong threadObjectAddress, int index, bool running, bool isInInterrupt, IGlobalExpressionEvaluator evaluator)
             {
                 _threadObjectAddress = threadObjectAddress;
                 _evaluator = evaluator;
+                _running = running;
+                UniqueID = index;
 
                 _name = evaluator.EvaluateStringExpression($"((ch_thread *)0x{_threadObjectAddress:x}).name");
                 _sp = evaluator.EvaluateIntegralExpression($"((ch_thread *)0x{_threadObjectAddress:x}).ctx.sp") ?? 0;
                 _lr = evaluator.EvaluateIntegralExpression($"((ch_thread *)0x{_threadObjectAddress:x}).ctx.sp.lr") ?? 0;
 
-                ulong? currentThread = evaluator.EvaluateIntegralExpression("ch.rlist.current");
-
-                _running = running;
-                _index = index;
-                UniqueID = _index + 1;
+                if (isInInterrupt && running)
+                {
+                    _name = "(INT) " + _name;
+                }
             }
 
             public int UniqueID { get; }
@@ -131,7 +135,7 @@ namespace ChibiOsThreads
 
             public string Name => _name;
 
-            public bool IsValid => _sp != 0 && _lr != 0;
+            public bool IsValid => true;
         }
     }
 }
